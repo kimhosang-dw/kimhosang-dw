@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>협업용 일정 관리 툴</title>
+    <!-- PWA 테마 색상 및 매니페스트 파일 연결 -->
+    <meta name="theme-color" content="#0d9488"/>
+    <link rel="manifest" href="manifest.json">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -134,9 +138,6 @@
         import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, query, getDoc, setDoc, arrayUnion, arrayRemove, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         document.addEventListener('DOMContentLoaded', () => {
-            // =================================================================================
-            // 사용자님의 Firebase 설정 키가 여기에 적용되었습니다.
-            // =================================================================================
             const firebaseConfig = {
                 apiKey: "AIzaSyB2Gf8Rgal2lL-eHXpxEVSkObJrAwlnLXk",
                 authDomain: "dowon-scheduler.firebaseapp.com",
@@ -145,9 +146,8 @@
                 messagingSenderId: "729645736346",
                 appId: "1:729645736346:web:dd77701301343dce131a23"
             };
-            // =================================================================================
             
-            const appId = 'default-schedule-app'; // 고유한 ID로 변경 가능
+            const appId = 'default-schedule-app';
             const MACHINES = ["1호기", "2호기", "3호기", "배합", "리본배합"];
             const USER_COLORS = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#34495e'];
 
@@ -178,10 +178,6 @@
             const modalContainer = document.getElementById('modal-container');
 
             async function initializeFirebase() {
-                if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("여기에")) {
-                     document.body.innerHTML = '<div class="text-red-500 text-center p-8"><h1>Firebase 설정 오류</h1><p>HTML 파일의 firebaseConfig 변수를 올바르게 설정해주세요.</p></div>';
-                    return;
-                }
                 try {
                     app = initializeApp(firebaseConfig);
                     db = getFirestore(app);
@@ -261,7 +257,6 @@
                     newUserInput.value = '';
                 } catch (error) {
                     console.error("사용자 추가 오류:", error);
-                    alert("사용자 추가에 실패했습니다. Firebase 데이터베이스 규칙을 확인해주세요.");
                 }
             }
 

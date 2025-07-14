@@ -32,18 +32,9 @@
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 antialiased">
-
-    <!-- 데스크톱 차단 화면 -->
-    <div id="desktop-blocker" class="fixed inset-0 bg-gray-800 text-white flex-col items-center justify-center z-50 hidden">
-        <div class="text-center">
-            <i class="fas fa-mobile-alt fa-5x mb-6"></i>
-            <h1 class="text-3xl font-bold">모바일 전용 애플리케이션</h1>
-            <p class="mt-2 text-lg text-gray-300">이 앱은 모바일 기기에서 사용해주세요.</p>
-        </div>
-    </div>
     
     <!-- 실제 앱 컨테이너 -->
-    <div id="app-container" class="hidden">
+    <div id="app-container">
         <!-- 사용자 관리 및 선택 화면 -->
         <div id="user-management-view" class="fixed inset-0 bg-gray-200 flex items-center justify-center z-50 p-4">
             <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-sm sm:max-w-lg">
@@ -137,551 +128,534 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, query, getDoc, setDoc, arrayUnion, arrayRemove, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // =================================================================================
-            // 중요! FIREBASE 설정: 아래 값을 당신의 Firebase 프로젝트 값으로 교체해주세요.
-            // =================================================================================
-            // 아래 가이드를 따라 `firebaseConfig` 객체를 발급받고, 이 부분을 통째로 붙여넣으세요.
-            // 가이드: "GitHub Pages로 웹사이트 만들기 가이드"의 2단계 참조
-            const firebaseConfig = {
-                apiKey: "여기에-당신의-API-키를-붙여넣으세요",
-                authDomain: "당신의-프로젝트-ID.firebaseapp.com",
-                projectId: "당신의-프로젝트-ID",
-                storageBucket: "당신의-프로젝트-ID.appspot.com",
-                messagingSenderId: "당신의-메시징-SENDER-ID",
-                appId: "당신의-APP-ID"
-            };
-            // =================================================================================
-            
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-schedule-app';
-            const MACHINES = ["1호기", "2호기", "3호기", "배합", "리본배합"];
-            const USER_COLORS = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#34495e'];
+        // =================================================================================
+        // 중요! FIREBASE 설정: 아래 값을 당신의 Firebase 프로젝트 값으로 교체해주세요.
+        // =================================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyB2Gf8Rgal2lL-eHXpxEVSkObJrAwlnLXk",
+  authDomain: "dowon-scheduler.firebaseapp.com",
+  projectId: "dowon-scheduler",
+  storageBucket: "dowon-scheduler.firebasestorage.app",
+  messagingSenderId: "729645736346",
+  appId: "1:729645736346:web:dd77701301343dce131a23"
+};
+        // =================================================================================
+        
+        const appId = 'default-schedule-app'; // 고유한 ID로 변경 가능
+        const MACHINES = ["1호기", "2호기", "3호기", "배합", "리본배합"];
+        const USER_COLORS = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#34495e'];
 
-            let app, db, auth, firebaseUserId;
-            let usersCollectionRef, tasksCollectionRef, workPlanCollectionRef;
-            let currentUser = null;
-            let allUsers = [];
-            let allTasks = [];
-            let currentCategoryFilter = 'all';
-            let currentWeekOffset = 0;
-            let unsubscribeTasks = () => {}, unsubscribeUsers = () => {}, unsubscribeWorkPlan = () => {};
+        let app, db, auth, firebaseUserId;
+        let usersCollectionRef, tasksCollectionRef, workPlanCollectionRef;
+        let currentUser = null;
+        let allUsers = [];
+        let allTasks = [];
+        let currentCategoryFilter = 'all';
+        let currentWeekOffset = 0;
+        let unsubscribeTasks = () => {}, unsubscribeUsers = () => {}, unsubscribeWorkPlan = () => {};
 
-            const desktopBlocker = document.getElementById('desktop-blocker');
-            const appContainer = document.getElementById('app-container');
-            const userManagementView = document.getElementById('user-management-view');
-            const mainAppView = document.getElementById('main-app-view');
-            const userList = document.getElementById('user-list');
-            const addUserBtn = document.getElementById('add-user-btn');
-            const newUserInput = document.getElementById('new-user-name');
-            const changeUserBtn = document.getElementById('change-user-btn');
-            const userInfo = document.getElementById('user-info');
-            const weekDisplay = document.getElementById('week-display');
-            const weeklyPlanHead = document.getElementById('weekly-plan-head');
-            const weeklyPlanBody = document.getElementById('weekly-plan-body');
-            const addTaskForm = document.getElementById('add-task-form');
-            const taskList = document.getElementById('task-list');
-            const tableScrollWrapper = document.getElementById('table-scroll-wrapper');
-            const tableOverflowContainer = document.getElementById('table-overflow-container');
-            const modalContainer = document.getElementById('modal-container');
+        const appContainer = document.getElementById('app-container');
+        const userManagementView = document.getElementById('user-management-view');
+        const mainAppView = document.getElementById('main-app-view');
+        const userList = document.getElementById('user-list');
+        const addUserBtn = document.getElementById('add-user-btn');
+        const newUserInput = document.getElementById('new-user-name');
+        const changeUserBtn = document.getElementById('change-user-btn');
+        const userInfo = document.getElementById('user-info');
+        const weekDisplay = document.getElementById('week-display');
+        const weeklyPlanHead = document.getElementById('weekly-plan-head');
+        const weeklyPlanBody = document.getElementById('weekly-plan-body');
+        const addTaskForm = document.getElementById('add-task-form');
+        const taskList = document.getElementById('task-list');
+        const tableScrollWrapper = document.getElementById('table-scroll-wrapper');
+        const tableOverflowContainer = document.getElementById('table-overflow-container');
+        const modalContainer = document.getElementById('modal-container');
 
-            function isMobileDevice() {
-                return ( 'ontouchstart' in window ) || ( navigator.maxTouchPoints > 0 ) || /Mobi|Android/i.test(navigator.userAgent);
+        async function initializeFirebase() {
+            if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("여기에")) {
+                 document.body.innerHTML = '<div class="text-red-500 text-center p-8"><h1>Firebase 설정 오류</h1><p>HTML 파일의 firebaseConfig 변수를 올바르게 설정해주세요.</p></div>';
+                return;
             }
-
-            function startApp() {
-                if (isMobileDevice()) {
-                    appContainer.classList.remove('hidden');
-                    initializeFirebase();
-                } else {
-                    desktopBlocker.classList.remove('hidden');
-                    desktopBlocker.classList.add('flex');
-                }
-            }
-
-            async function initializeFirebase() {
-                if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("여기에")) {
-                     document.body.innerHTML = '<div class="text-red-500 text-center p-8"><h1>Firebase 설정 오류</h1><p>HTML 파일의 firebaseConfig 변수를 올바르게 설정해주세요.</p></div>';
-                    return;
-                }
-                try {
-                    app = initializeApp(firebaseConfig);
-                    db = getFirestore(app);
-                    auth = getAuth(app);
-                    
-                    usersCollectionRef = collection(db, `artifacts/${appId}/public/data/users`);
-                    tasksCollectionRef = collection(db, `artifacts/${appId}/public/data/schedules`);
-                    workPlanCollectionRef = collection(db, `artifacts/${appId}/public/data/workPlan`);
-
-                    onAuthStateChanged(auth, user => {
-                        if (user) {
-                            firebaseUserId = user.uid;
-                            showUserManagementScreen();
-                        } else {
-                            signInAnonymously(auth).catch(err => console.error("익명 로그인 실패:", err));
-                        }
-                    });
-                } catch (error) {
-                    console.error("Firebase 초기화 실패:", error);
-                }
-            }
-
-            function showUserManagementScreen() {
-                unsubscribeAll();
-                userManagementView.classList.remove('hidden');
-                mainAppView.classList.add('hidden');
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
                 
-                addUserBtn.onclick = addNewUser;
-                newUserInput.onkeydown = (e) => { if (e.key === 'Enter') addNewUser(); };
+                usersCollectionRef = collection(db, `artifacts/${appId}/public/data/users`);
+                tasksCollectionRef = collection(db, `artifacts/${appId}/public/data/schedules`);
+                workPlanCollectionRef = collection(db, `artifacts/${appId}/public/data/workPlan`);
 
-                unsubscribeUsers = onSnapshot(usersCollectionRef, snapshot => {
-                    allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    renderUserList(allUsers);
-                });
-            }
-
-            function showMainAppScreen(user) {
-                unsubscribeAll();
-                currentUser = user;
-                userManagementView.classList.add('hidden');
-                mainAppView.classList.remove('hidden');
-                
-                attachMainAppEventListeners();
-                
-                userInfo.innerHTML = `<span class="font-bold" style="color:${currentUser.color};">${currentUser.name}</span>님, 환영합니다.`;
-                
-                renderWeeklyPlan();
-                listenForTasks();
-                listenForUsersForColorMapping();
-            }
-
-            function attachMainAppEventListeners() {
-                changeUserBtn.onclick = showUserManagementScreen;
-                addTaskForm.onsubmit = handleAddTask;
-                document.getElementById('prev-week-btn').onclick = () => { currentWeekOffset--; renderWeeklyPlan(); };
-                document.getElementById('next-week-btn').onclick = () => { currentWeekOffset++; renderWeeklyPlan(); };
-                window.addEventListener('resize', checkTableScroll);
-                setupCategoryFilters();
-            }
-
-            function unsubscribeAll() {
-                unsubscribeTasks();
-                unsubscribeUsers();
-                unsubscribeWorkPlan();
-            }
-            
-            async function addNewUser() {
-                const name = newUserInput.value.trim();
-                if (!name) return;
-                
-                const snapshot = await getDocs(usersCollectionRef);
-                const colorIndex = snapshot.size % USER_COLORS.length;
-                const color = USER_COLORS[colorIndex];
-                
-                await addDoc(usersCollectionRef, { name, color });
-                newUserInput.value = '';
-            }
-
-            function renderUserList(users) {
-                if (!userList) return;
-                userList.innerHTML = '';
-                users.forEach(user => {
-                    const btnWrapper = document.createElement('div');
-                    btnWrapper.className = 'user-btn-wrapper';
-
-                    const renderNormalState = () => {
-                        btnWrapper.innerHTML = '';
-                        const btn = document.createElement('button');
-                        btn.className = 'user-btn w-full p-3 rounded-lg text-white font-bold shadow-md transition text-sm';
-                        btn.textContent = user.name;
-                        btn.style.backgroundColor = user.color;
-                        btn.onclick = () => showMainAppScreen(user);
-
-                        const deleteBtn = document.createElement('button');
-                        deleteBtn.className = 'absolute top-1 right-1 text-white text-opacity-60 hover:text-opacity-100 transition-opacity p-1';
-                        deleteBtn.innerHTML = '<i class="fas fa-times-circle text-base"></i>';
-                        deleteBtn.onclick = (e) => { e.stopPropagation(); renderConfirmState(); };
-                        
-                        btnWrapper.appendChild(btn);
-                        btnWrapper.appendChild(deleteBtn);
-                    };
-
-                    const renderConfirmState = () => {
-                        btnWrapper.innerHTML = '';
-                        const confirmationDiv = document.createElement('div');
-                        confirmationDiv.className = 'w-full p-3 rounded-lg bg-red-500 text-white text-sm text-center flex flex-col items-center justify-center h-full';
-                        
-                        const p = document.createElement('p');
-                        p.className = 'font-semibold mb-1';
-                        p.textContent = '삭제?';
-                        
-                        const btnGroup = document.createElement('div');
-                        btnGroup.className = 'flex space-x-2';
-
-                        const yesBtn = document.createElement('button');
-                        yesBtn.className = 'bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded text-xs';
-                        yesBtn.textContent = '예';
-                        yesBtn.onclick = (e) => { e.stopPropagation(); deleteUser(user.id); };
-
-                        const noBtn = document.createElement('button');
-                        noBtn.className = 'bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs';
-                        noBtn.textContent = '아니오';
-                        noBtn.onclick = (e) => { e.stopPropagation(); renderNormalState(); };
-
-                        btnGroup.appendChild(yesBtn);
-                        btnGroup.appendChild(noBtn);
-                        confirmationDiv.appendChild(p);
-                        confirmationDiv.appendChild(btnGroup);
-                        btnWrapper.appendChild(confirmationDiv);
-                    };
-
-                    renderNormalState();
-                    userList.appendChild(btnWrapper);
-                });
-            }
-
-            async function deleteUser(userId) {
-                const userDocRef = doc(db, `artifacts/${appId}/public/data/users`, userId);
-                await deleteDoc(userDocRef);
-                if (currentUser && currentUser.id === userId) {
-                    showUserManagementScreen();
-                }
-            }
-
-            function renderWeeklyPlan() {
-                const week = getWeekInfo(currentWeekOffset);
-                weekDisplay.textContent = `${week.start.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })} ~ ${week.end.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}`;
-                
-                let headHTML = '<tr><th class="p-2 border bg-gray-200 text-sm sticky left-0 z-10">설비</th>';
-                const days = ["월", "화", "수", "목", "금", "토", "일"];
-                week.dates.forEach((date, i) => {
-                    const isToday = new Date().toDateString() === date.toDateString();
-                    headHTML += `<th class="p-2 border text-sm ${isToday ? 'bg-teal-200' : 'bg-gray-50'}">${days[i]}<br>${date.getDate()}</th>`;
-                });
-                headHTML += '</tr>';
-                weeklyPlanHead.innerHTML = headHTML;
-                
-                let bodyHTML = '';
-                MACHINES.forEach(machine => {
-                    bodyHTML += `<tr><td class="p-2 border font-semibold bg-gray-50 text-sm sticky left-0 z-10">${machine}</td>`;
-                    week.dates.forEach(date => {
-                        const dateString = toYYYYMMDD(date);
-                        bodyHTML += `<td id="plan-${machine}-${dateString}" class="plan-cell p-1 border align-top text-xs" data-machine="${machine}" data-date="${dateString}"></td>`;
-                    });
-                    bodyHTML += '</tr>';
-                });
-                weeklyPlanBody.innerHTML = bodyHTML;
-                
-                listenForWorkPlan(week.id);
-                
-                weeklyPlanBody.onclick = (e) => {
-                    const cell = e.target.closest('.plan-cell');
-                    if (cell) openWorkPlanModal(cell.dataset.machine, cell.dataset.date);
-                };
-
-                setTimeout(checkTableScroll, 100);
-            }
-
-            function checkTableScroll() {
-                if (tableOverflowContainer && tableScrollWrapper) {
-                    if (tableOverflowContainer.scrollWidth > tableOverflowContainer.clientWidth) {
-                        tableScrollWrapper.classList.add('is-scrollable');
+                onAuthStateChanged(auth, user => {
+                    if (user) {
+                        firebaseUserId = user.uid;
+                        showUserManagementScreen();
                     } else {
-                        tableScrollWrapper.classList.remove('is-scrollable');
+                        signInAnonymously(auth).catch(err => console.error("익명 로그인 실패:", err));
                     }
-                }
-            }
-
-            function listenForWorkPlan(weekId) {
-                unsubscribeWorkPlan();
-                const docRef = doc(workPlanCollectionRef, weekId);
-                unsubscribeWorkPlan = onSnapshot(docRef, (docSnap) => {
-                    if (!document.getElementById('weekly-plan-body')) return;
-                    const planData = docSnap.exists() ? docSnap.data().plan : {};
-                    populateWorkPlan(planData);
                 });
+            } catch (error) {
+                console.error("Firebase 초기화 실패:", error);
             }
+        }
 
-            function populateWorkPlan(planData) {
-                const week = getWeekInfo(currentWeekOffset);
-                MACHINES.forEach(machine => {
-                    week.dates.forEach(date => {
-                        const dateString = toYYYYMMDD(date);
-                        const cell = document.getElementById(`plan-${machine}-${dateString}`);
-                        if (!cell) return;
-                        
-                        const items = planData[machine]?.[dateString] || [];
-                        cell.innerHTML = items.map(item => `<div class="bg-gray-200 rounded px-1.5 py-1 mb-1 truncate">${escapeHTML(item)}</div>`).join('');
-                    });
+        function showUserManagementScreen() {
+            unsubscribeAll();
+            userManagementView.classList.remove('hidden');
+            mainAppView.classList.add('hidden');
+            
+            addUserBtn.onclick = addNewUser;
+            newUserInput.onkeydown = (e) => { if (e.key === 'Enter') addNewUser(); };
+
+            unsubscribeUsers = onSnapshot(usersCollectionRef, snapshot => {
+                allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderUserList(allUsers);
+            });
+        }
+
+        function showMainAppScreen(user) {
+            unsubscribeAll();
+            currentUser = user;
+            userManagementView.classList.add('hidden');
+            mainAppView.classList.remove('hidden');
+            
+            attachMainAppEventListeners();
+            
+            userInfo.innerHTML = `<span class="font-bold" style="color:${currentUser.color};">${currentUser.name}</span>님, 환영합니다.`;
+            
+            renderWeeklyPlan();
+            listenForTasks();
+            listenForUsersForColorMapping();
+        }
+
+        function attachMainAppEventListeners() {
+            changeUserBtn.onclick = showUserManagementScreen;
+            addTaskForm.onsubmit = handleAddTask;
+            document.getElementById('prev-week-btn').onclick = () => { currentWeekOffset--; renderWeeklyPlan(); };
+            document.getElementById('next-week-btn').onclick = () => { currentWeekOffset++; renderWeeklyPlan(); };
+            window.addEventListener('resize', checkTableScroll);
+            setupCategoryFilters();
+        }
+
+        function unsubscribeAll() {
+            unsubscribeTasks();
+            unsubscribeUsers();
+            unsubscribeWorkPlan();
+        }
+        
+        async function addNewUser() {
+            const name = newUserInput.value.trim();
+            if (!name) return;
+            
+            const snapshot = await getDocs(usersCollectionRef);
+            const colorIndex = snapshot.size % USER_COLORS.length;
+            const color = USER_COLORS[colorIndex];
+            
+            await addDoc(usersCollectionRef, { name, color });
+            newUserInput.value = '';
+        }
+
+        function renderUserList(users) {
+            if (!userList) return;
+            userList.innerHTML = '';
+            users.forEach(user => {
+                const btnWrapper = document.createElement('div');
+                btnWrapper.className = 'user-btn-wrapper';
+
+                const renderNormalState = () => {
+                    btnWrapper.innerHTML = '';
+                    const btn = document.createElement('button');
+                    btn.className = 'user-btn w-full p-3 rounded-lg text-white font-bold shadow-md transition text-sm';
+                    btn.textContent = user.name;
+                    btn.style.backgroundColor = user.color;
+                    btn.onclick = () => showMainAppScreen(user);
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'absolute top-1 right-1 text-white text-opacity-60 hover:text-opacity-100 transition-opacity p-1';
+                    deleteBtn.innerHTML = '<i class="fas fa-times-circle text-base"></i>';
+                    deleteBtn.onclick = (e) => { e.stopPropagation(); renderConfirmState(); };
+                    
+                    btnWrapper.appendChild(btn);
+                    btnWrapper.appendChild(deleteBtn);
+                };
+
+                const renderConfirmState = () => {
+                    btnWrapper.innerHTML = '';
+                    const confirmationDiv = document.createElement('div');
+                    confirmationDiv.className = 'w-full p-3 rounded-lg bg-red-500 text-white text-sm text-center flex flex-col items-center justify-center h-full';
+                    
+                    const p = document.createElement('p');
+                    p.className = 'font-semibold mb-1';
+                    p.textContent = '삭제?';
+                    
+                    const btnGroup = document.createElement('div');
+                    btnGroup.className = 'flex space-x-2';
+
+                    const yesBtn = document.createElement('button');
+                    yesBtn.className = 'bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded text-xs';
+                    yesBtn.textContent = '예';
+                    yesBtn.onclick = (e) => { e.stopPropagation(); deleteUser(user.id); };
+
+                    const noBtn = document.createElement('button');
+                    noBtn.className = 'bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs';
+                    noBtn.textContent = '아니오';
+                    noBtn.onclick = (e) => { e.stopPropagation(); renderNormalState(); };
+
+                    btnGroup.appendChild(yesBtn);
+                    btnGroup.appendChild(noBtn);
+                    confirmationDiv.appendChild(p);
+                    confirmationDiv.appendChild(btnGroup);
+                    btnWrapper.appendChild(confirmationDiv);
+                };
+
+                renderNormalState();
+                userList.appendChild(btnWrapper);
+            });
+        }
+
+        async function deleteUser(userId) {
+            const userDocRef = doc(db, `artifacts/${appId}/public/data/users`, userId);
+            await deleteDoc(userDocRef);
+            if (currentUser && currentUser.id === userId) {
+                showUserManagementScreen();
+            }
+        }
+
+        function renderWeeklyPlan() {
+            const week = getWeekInfo(currentWeekOffset);
+            weekDisplay.textContent = `${week.start.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })} ~ ${week.end.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}`;
+            
+            let headHTML = '<tr><th class="p-2 border bg-gray-200 text-sm sticky left-0 z-10">설비</th>';
+            const days = ["월", "화", "수", "목", "금", "토", "일"];
+            week.dates.forEach((date, i) => {
+                const isToday = new Date().toDateString() === date.toDateString();
+                headHTML += `<th class="p-2 border text-sm ${isToday ? 'bg-teal-200' : 'bg-gray-50'}">${days[i]}<br>${date.getDate()}</th>`;
+            });
+            headHTML += '</tr>';
+            weeklyPlanHead.innerHTML = headHTML;
+            
+            let bodyHTML = '';
+            MACHINES.forEach(machine => {
+                bodyHTML += `<tr><td class="p-2 border font-semibold bg-gray-50 text-sm sticky left-0 z-10">${machine}</td>`;
+                week.dates.forEach(date => {
+                    const dateString = toYYYYMMDD(date);
+                    bodyHTML += `<td id="plan-${machine}-${dateString}" class="plan-cell p-1 border align-top text-xs" data-machine="${machine}" data-date="${dateString}"></td>`;
                 });
-            }
+                bodyHTML += '</tr>';
+            });
+            weeklyPlanBody.innerHTML = bodyHTML;
+            
+            listenForWorkPlan(week.id);
+            
+            weeklyPlanBody.onclick = (e) => {
+                const cell = e.target.closest('.plan-cell');
+                if (cell) openWorkPlanModal(cell.dataset.machine, cell.dataset.date);
+            };
 
-            function listenForUsersForColorMapping() {
-                unsubscribeUsers();
-                unsubscribeUsers = onSnapshot(usersCollectionRef, snapshot => {
-                    allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    renderTaskList();
-                });
-            }
+            setTimeout(checkTableScroll, 100);
+        }
 
-            function listenForTasks() {
-                unsubscribeTasks();
-                const q = query(tasksCollectionRef);
-                unsubscribeTasks = onSnapshot(q, (snapshot) => {
-                    allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    renderTaskList();
-                });
-            }
-
-            function renderTaskList() {
-                if (!taskList) return;
-                taskList.innerHTML = '';
-                
-                const filteredTasks = currentCategoryFilter === 'all' 
-                    ? allTasks 
-                    : allTasks.filter(task => task.category === currentCategoryFilter);
-
-                filteredTasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
-                if (filteredTasks.length === 0) {
-                    taskList.innerHTML = '<p class="text-gray-500 text-center col-span-full">표시할 일정이 없습니다.</p>';
+        function checkTableScroll() {
+            if (tableOverflowContainer && tableScrollWrapper) {
+                if (tableOverflowContainer.scrollWidth > tableOverflowContainer.clientWidth) {
+                    tableScrollWrapper.classList.add('is-scrollable');
                 } else {
-                    filteredTasks.forEach(task => taskList.appendChild(createTaskCard(task)));
+                    tableScrollWrapper.classList.remove('is-scrollable');
                 }
             }
+        }
 
-            function setupCategoryFilters() {
-                const filterButtons = document.querySelectorAll('.filter-btn');
-                filterButtons.forEach(button => {
-                    button.addEventListener('click', () => {
-                        filterButtons.forEach(btn => btn.classList.remove('active', 'bg-teal-600', 'text-white'));
-                        button.classList.add('active', 'bg-teal-600', 'text-white');
-                        currentCategoryFilter = button.dataset.filter;
-                        renderTaskList();
-                    });
+        function listenForWorkPlan(weekId) {
+            unsubscribeWorkPlan();
+            const docRef = doc(workPlanCollectionRef, weekId);
+            unsubscribeWorkPlan = onSnapshot(docRef, (docSnap) => {
+                if (!document.getElementById('weekly-plan-body')) return;
+                const planData = docSnap.exists() ? docSnap.data().plan : {};
+                populateWorkPlan(planData);
+            });
+        }
+
+        function populateWorkPlan(planData) {
+            const week = getWeekInfo(currentWeekOffset);
+            MACHINES.forEach(machine => {
+                week.dates.forEach(date => {
+                    const dateString = toYYYYMMDD(date);
+                    const cell = document.getElementById(`plan-${machine}-${dateString}`);
+                    if (!cell) return;
+                    
+                    const items = planData[machine]?.[dateString] || [];
+                    cell.innerHTML = items.map(item => `<div class="bg-gray-200 rounded px-1.5 py-1 mb-1 truncate">${escapeHTML(item)}</div>`).join('');
                 });
+            });
+        }
+
+        function listenForUsersForColorMapping() {
+            unsubscribeUsers();
+            unsubscribeUsers = onSnapshot(usersCollectionRef, snapshot => {
+                allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderTaskList();
+            });
+        }
+
+        function listenForTasks() {
+            unsubscribeTasks();
+            const q = query(tasksCollectionRef);
+            unsubscribeTasks = onSnapshot(q, (snapshot) => {
+                allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderTaskList();
+            });
+        }
+
+        function renderTaskList() {
+            if (!taskList) return;
+            taskList.innerHTML = '';
+            
+            const filteredTasks = currentCategoryFilter === 'all' 
+                ? allTasks 
+                : allTasks.filter(task => task.category === currentCategoryFilter);
+
+            filteredTasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+            if (filteredTasks.length === 0) {
+                taskList.innerHTML = '<p class="text-gray-500 text-center col-span-full">표시할 일정이 없습니다.</p>';
+            } else {
+                filteredTasks.forEach(task => taskList.appendChild(createTaskCard(task)));
             }
+        }
 
-            function createTaskCard(task) {
-                const card = document.createElement('div');
-                const authorColor = allUsers.find(u => u.name === task.authorName)?.color || '#607d8b';
-                card.className = 'bg-white p-4 rounded-lg shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-1';
-                card.style.borderLeft = `5px solid ${authorColor}`;
+        function setupCategoryFilters() {
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            filterButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    filterButtons.forEach(btn => btn.classList.remove('active', 'bg-teal-600', 'text-white'));
+                    button.classList.add('active', 'bg-teal-600', 'text-white');
+                    currentCategoryFilter = button.dataset.filter;
+                    renderTaskList();
+                });
+            });
+        }
 
-                let dateText = `마감: ${task.dueDate}`;
-                const today = new Date(); today.setHours(0,0,0,0);
-                const dueDate = new Date(task.dueDate); dueDate.setHours(0,0,0,0);
-                if (dueDate < today) dateText += ' (지남)';
-                else if (dueDate.getTime() === today.getTime()) dateText = '오늘 마감!';
-                
-                card.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-xs font-semibold text-white px-2 py-1 rounded" style="background-color:${authorColor};">${escapeHTML(task.category)}</span>
-                        <div>
-                            <button class="edit-btn text-blue-500 p-1"><i class="fas fa-edit"></i></button>
-                            <button class="delete-btn text-red-500 p-1"><i class="fas fa-trash"></i></button>
-                        </div>
+        function createTaskCard(task) {
+            const card = document.createElement('div');
+            const authorColor = allUsers.find(u => u.name === task.authorName)?.color || '#607d8b';
+            card.className = 'bg-white p-4 rounded-lg shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-1';
+            card.style.borderLeft = `5px solid ${authorColor}`;
+
+            let dateText = `마감: ${task.dueDate}`;
+            const today = new Date(); today.setHours(0,0,0,0);
+            const dueDate = new Date(task.dueDate); dueDate.setHours(0,0,0,0);
+            if (dueDate < today) dateText += ' (지남)';
+            else if (dueDate.getTime() === today.getTime()) dateText = '오늘 마감!';
+            
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs font-semibold text-white px-2 py-1 rounded" style="background-color:${authorColor};">${escapeHTML(task.category)}</span>
+                    <div>
+                        <button class="edit-btn text-blue-500 p-1"><i class="fas fa-edit"></i></button>
+                        <button class="delete-btn text-red-500 p-1"><i class="fas fa-trash"></i></button>
                     </div>
-                    <p class="text-base font-semibold break-words my-2">${escapeHTML(task.content)}</p>
-                    <p class="text-sm text-gray-600">${dateText}</p>
-                    <p class="text-xs text-gray-500 mt-3">작성자: ${escapeHTML(task.authorName)}</p>
-                `;
-                
-                card.querySelector('.edit-btn').addEventListener('click', () => openEditTaskModal(task));
-                card.querySelector('.delete-btn').addEventListener('click', () => openDeleteConfirmModal(task.id));
-
-                return card;
-            }
+                </div>
+                <p class="text-base font-semibold break-words my-2">${escapeHTML(task.content)}</p>
+                <p class="text-sm text-gray-600">${dateText}</p>
+                <p class="text-xs text-gray-500 mt-3">작성자: ${escapeHTML(task.authorName)}</p>
+            `;
             
-            async function handleAddTask(e) {
-                e.preventDefault();
-                const content = document.getElementById('task-content').value.trim();
-                const category = document.getElementById('task-category').value;
-                const dueDate = document.getElementById('task-due-date').value;
+            card.querySelector('.edit-btn').addEventListener('click', () => openEditTaskModal(task));
+            card.querySelector('.delete-btn').addEventListener('click', () => openDeleteConfirmModal(task.id));
 
-                if (content && dueDate && currentUser) {
-                    await addDoc(tasksCollectionRef, {
-                        content, category, dueDate,
-                        authorName: currentUser.name,
-                        authorId: firebaseUserId,
-                        createdAt: serverTimestamp()
-                    });
-                    addTaskForm.reset();
-                }
-            }
+            return card;
+        }
+        
+        async function handleAddTask(e) {
+            e.preventDefault();
+            const content = document.getElementById('task-content').value.trim();
+            const category = document.getElementById('task-category').value;
+            const dueDate = document.getElementById('task-due-date').value;
 
-            function showModal(innerHTML) {
-                modalContainer.innerHTML = innerHTML;
-                const modal = modalContainer.querySelector('.modal');
-                if (modal) {
-                    modal.addEventListener('click', (e) => {
-                        if (e.target === modal) closeModal();
-                    });
-                }
-            }
-            
-            function closeModal() {
-                modalContainer.innerHTML = '';
-            }
-
-            function openWorkPlanModal(machine, date) {
-                const modalHTML = `
-                    <div class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
-                        <div class="bg-white p-6 rounded-xl shadow-2xl w-11/12 max-w-md">
-                            <h3 id="work-plan-modal-title" class="text-xl font-bold mb-4">${date} - ${machine} 품명 관리</h3>
-                            <div id="work-plan-items-list" class="mb-4 space-y-2 max-h-48 overflow-y-auto"></div>
-                            <div id="work-plan-add-item-form" class="flex gap-2">
-                                <input type="text" id="new-plan-item-name" placeholder="품명 입력" class="w-full px-3 py-2 border rounded-lg">
-                                <button id="add-plan-item-btn" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">추가</button>
-                            </div>
-                            <button id="close-work-plan-modal" class="mt-4 w-full bg-gray-200 py-2 rounded-lg hover:bg-gray-300">닫기</button>
-                        </div>
-                    </div>`;
-                showModal(modalHTML);
-                
-                const list = document.getElementById('work-plan-items-list');
-                const form = document.getElementById('work-plan-add-item-form');
-                const input = document.getElementById('new-plan-item-name');
-                const addBtn = document.getElementById('add-plan-item-btn');
-                document.getElementById('close-work-plan-modal').onclick = closeModal;
-
-                const weekId = getWeekInfo(currentWeekOffset).id;
-                const docRef = doc(workPlanCollectionRef, weekId);
-
-                getDoc(docRef).then(docSnap => {
-                    const items = docSnap.exists() ? (docSnap.data().plan?.[machine]?.[date] || []) : [];
-                    list.innerHTML = items.map(item => `
-                        <div class="plan-item bg-gray-100 p-2 rounded">
-                            <span class="truncate">${escapeHTML(item)}</span>
-                            <button class="delete-plan-item-btn text-red-500 hover:text-red-700 ml-2 flex-shrink-0" data-item="${escapeHTML(item)}"><i class="fas fa-times-circle"></i></button>
-                        </div>`).join('');
-                    form.style.display = items.length >= 3 ? 'none' : 'flex';
+            if (content && dueDate && currentUser) {
+                await addDoc(tasksCollectionRef, {
+                    content, category, dueDate,
+                    authorName: currentUser.name,
+                    authorId: firebaseUserId,
+                    createdAt: serverTimestamp()
                 });
-                
-                addBtn.onclick = async () => {
-                    const newItem = input.value.trim();
-                    if (!newItem) return;
-                    await setDoc(docRef, { plan: { [machine]: { [date]: arrayUnion(newItem) } } }, { merge: true });
-                    input.value = '';
+                addTaskForm.reset();
+            }
+        }
+
+        function showModal(innerHTML) {
+            modalContainer.innerHTML = innerHTML;
+            const modal = modalContainer.querySelector('.modal');
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) closeModal();
+                });
+            }
+        }
+        
+        function closeModal() {
+            modalContainer.innerHTML = '';
+        }
+
+        function openWorkPlanModal(machine, date) {
+            const modalHTML = `
+                <div class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+                    <div class="bg-white p-6 rounded-xl shadow-2xl w-11/12 max-w-md">
+                        <h3 id="work-plan-modal-title" class="text-xl font-bold mb-4">${date} - ${machine} 품명 관리</h3>
+                        <div id="work-plan-items-list" class="mb-4 space-y-2 max-h-48 overflow-y-auto"></div>
+                        <div id="work-plan-add-item-form" class="flex gap-2">
+                            <input type="text" id="new-plan-item-name" placeholder="품명 입력" class="w-full px-3 py-2 border rounded-lg">
+                            <button id="add-plan-item-btn" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">추가</button>
+                        </div>
+                        <button id="close-work-plan-modal" class="mt-4 w-full bg-gray-200 py-2 rounded-lg hover:bg-gray-300">닫기</button>
+                    </div>
+                </div>`;
+            showModal(modalHTML);
+            
+            const list = document.getElementById('work-plan-items-list');
+            const form = document.getElementById('work-plan-add-item-form');
+            const input = document.getElementById('new-plan-item-name');
+            const addBtn = document.getElementById('add-plan-item-btn');
+            document.getElementById('close-work-plan-modal').onclick = closeModal;
+
+            const weekId = getWeekInfo(currentWeekOffset).id;
+            const docRef = doc(workPlanCollectionRef, weekId);
+
+            getDoc(docRef).then(docSnap => {
+                const items = docSnap.exists() ? (docSnap.data().plan?.[machine]?.[date] || []) : [];
+                list.innerHTML = items.map(item => `
+                    <div class="plan-item bg-gray-100 p-2 rounded">
+                        <span class="truncate">${escapeHTML(item)}</span>
+                        <button class="delete-plan-item-btn text-red-500 hover:text-red-700 ml-2 flex-shrink-0" data-item="${escapeHTML(item)}"><i class="fas fa-times-circle"></i></button>
+                    </div>`).join('');
+                form.style.display = items.length >= 3 ? 'none' : 'flex';
+            });
+            
+            addBtn.onclick = async () => {
+                const newItem = input.value.trim();
+                if (!newItem) return;
+                await setDoc(docRef, { plan: { [machine]: { [date]: arrayUnion(newItem) } } }, { merge: true });
+                input.value = '';
+                openWorkPlanModal(machine, date);
+            };
+
+            list.onclick = async (e) => {
+                const delBtn = e.target.closest('.delete-plan-item-btn');
+                if (delBtn) {
+                    const itemToDelete = delBtn.dataset.item;
+                    await updateDoc(docRef, { [`plan.${machine}.${date}`]: arrayRemove(itemToDelete) });
                     openWorkPlanModal(machine, date);
-                };
-
-                list.onclick = async (e) => {
-                    const delBtn = e.target.closest('.delete-plan-item-btn');
-                    if (delBtn) {
-                        const itemToDelete = delBtn.dataset.item;
-                        await updateDoc(docRef, { [`plan.${machine}.${date}`]: arrayRemove(itemToDelete) });
-                        openWorkPlanModal(machine, date);
-                    }
-                };
-            }
-
-            function openEditTaskModal(task) {
-                const modalHTML = `
-                    <div class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-30">
-                        <div class="bg-white p-6 rounded-xl shadow-2xl w-11/12 max-w-md">
-                            <h3 class="text-xl font-bold mb-6">일정 수정</h3>
-                            <form id="edit-task-form-dynamic">
-                                <input type="hidden" id="edit-task-id" value="${task.id}">
-                                <div class="mb-4">
-                                    <label for="edit-task-content" class="block text-sm font-medium text-gray-700 mb-1">작업 내용</label>
-                                    <input type="text" id="edit-task-content" class="w-full px-4 py-2 border rounded-lg" value="${escapeHTML(task.content)}" required>
-                                </div>
-                                <div class="mb-4">
-                                    <label for="edit-task-category" class="block text-sm font-medium text-gray-700 mb-1">구분</label>
-                                    <select id="edit-task-category" class="w-full px-4 py-2 border rounded-lg">
-                                        <option value="입고" ${task.category === '입고' ? 'selected' : ''}>입고</option>
-                                        <option value="출고" ${task.category === '출고' ? 'selected' : ''}>출고</option>
-                                        <option value="기타" ${task.category === '기타' ? 'selected' : ''}>기타</option>
-                                    </select>
-                                </div>
-                                <div class="mb-6">
-                                    <label for="edit-task-due-date" class="block text-sm font-medium text-gray-700 mb-1">마감일</label>
-                                    <input type="date" id="edit-task-due-date" class="w-full px-4 py-2 border rounded-lg" value="${task.dueDate}" required>
-                                </div>
-                                <div class="flex justify-end space-x-4">
-                                    <button type="button" id="cancel-edit-btn" class="px-6 py-2 bg-gray-200 rounded-lg">취소</button>
-                                    <button type="submit" class="px-6 py-2 bg-teal-600 text-white font-bold rounded-lg">저장</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>`;
-                showModal(modalHTML);
-                
-                document.getElementById('edit-task-form-dynamic').addEventListener('submit', handleUpdateTask);
-                document.getElementById('cancel-edit-btn').addEventListener('click', closeModal);
-            }
-
-            async function handleUpdateTask(e) {
-                e.preventDefault();
-                const id = document.getElementById('edit-task-id').value;
-                const content = document.getElementById('edit-task-content').value.trim();
-                const category = document.getElementById('edit-task-category').value;
-                const dueDate = document.getElementById('edit-task-due-date').value;
-
-                if (id && content && dueDate) {
-                    const taskDocRef = doc(db, `artifacts/${appId}/public/data/schedules`, id);
-                    await updateDoc(taskDocRef, { content, category, dueDate });
-                    closeModal();
                 }
-            }
+            };
+        }
 
-            function openDeleteConfirmModal(taskId) {
-                const modalHTML = `
-                    <div class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
-                        <div class="bg-white p-6 rounded-xl shadow-2xl w-11/12 max-w-sm text-center">
-                            <i class="fas fa-exclamation-triangle text-4xl text-red-500 mb-4"></i>
-                            <h3 class="text-xl font-bold mb-2">일정을 삭제하시겠습니까?</h3>
-                            <p class="text-gray-600 mb-6">이 작업은 되돌릴 수 없습니다.</p>
-                            <div class="flex justify-center space-x-4">
-                                <button id="cancel-delete-btn" class="px-6 py-2 bg-gray-200 rounded-lg">취소</button>
-                                <button id="confirm-delete-btn" class="px-6 py-2 bg-red-600 text-white font-bold rounded-lg">삭제</button>
+        function openEditTaskModal(task) {
+            const modalHTML = `
+                <div class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-30">
+                    <div class="bg-white p-6 rounded-xl shadow-2xl w-11/12 max-w-md">
+                        <h3 class="text-xl font-bold mb-6">일정 수정</h3>
+                        <form id="edit-task-form-dynamic">
+                            <input type="hidden" id="edit-task-id" value="${task.id}">
+                            <div class="mb-4">
+                                <label for="edit-task-content" class="block text-sm font-medium text-gray-700 mb-1">작업 내용</label>
+                                <input type="text" id="edit-task-content" class="w-full px-4 py-2 border rounded-lg" value="${escapeHTML(task.content)}" required>
                             </div>
-                        </div>
-                    </div>`;
-                showModal(modalHTML);
-                document.getElementById('confirm-delete-btn').onclick = () => deleteTask(taskId);
-                document.getElementById('cancel-delete-btn').onclick = closeModal;
-            }
+                            <div class="mb-4">
+                                <label for="edit-task-category" class="block text-sm font-medium text-gray-700 mb-1">구분</label>
+                                <select id="edit-task-category" class="w-full px-4 py-2 border rounded-lg">
+                                    <option value="입고" ${task.category === '입고' ? 'selected' : ''}>입고</option>
+                                    <option value="출고" ${task.category === '출고' ? 'selected' : ''}>출고</option>
+                                    <option value="기타" ${task.category === '기타' ? 'selected' : ''}>기타</option>
+                                </select>
+                            </div>
+                            <div class="mb-6">
+                                <label for="edit-task-due-date" class="block text-sm font-medium text-gray-700 mb-1">마감일</label>
+                                <input type="date" id="edit-task-due-date" class="w-full px-4 py-2 border rounded-lg" value="${task.dueDate}" required>
+                            </div>
+                            <div class="flex justify-end space-x-4">
+                                <button type="button" id="cancel-edit-btn" class="px-6 py-2 bg-gray-200 rounded-lg">취소</button>
+                                <button type="submit" class="px-6 py-2 bg-teal-600 text-white font-bold rounded-lg">저장</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>`;
+            showModal(modalHTML);
+            
+            document.getElementById('edit-task-form-dynamic').addEventListener('submit', handleUpdateTask);
+            document.getElementById('cancel-edit-btn').addEventListener('click', closeModal);
+        }
 
-            async function deleteTask(taskId) {
-                const taskDocRef = doc(db, `artifacts/${appId}/public/data/schedules`, taskId);
-                await deleteDoc(taskDocRef);
+        async function handleUpdateTask(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-task-id').value;
+            const content = document.getElementById('edit-task-content').value.trim();
+            const category = document.getElementById('edit-task-category').value;
+            const dueDate = document.getElementById('edit-task-due-date').value;
+
+            if (id && content && dueDate) {
+                const taskDocRef = doc(db, `artifacts/${appId}/public/data/schedules`, id);
+                await updateDoc(taskDocRef, { content, category, dueDate });
                 closeModal();
             }
+        }
 
-            function getWeekInfo(offset = 0) {
-                const now = new Date();
-                now.setDate(now.getDate() + offset * 7);
-                const dayOfWeek = now.getDay();
-                const mondayOffset = (dayOfWeek === 0) ? -6 : 1 - dayOfWeek;
-                const monday = new Date(now);
-                monday.setDate(now.getDate() + mondayOffset);
-                
-                const dates = Array.from({length: 7}, (_, i) => {
-                    const d = new Date(monday);
-                    d.setDate(monday.getDate() + i);
-                    return d;
-                });
-                
-                const year = monday.getFullYear();
-                const startOfYear = new Date(year, 0, 1);
-                const weekNumber = Math.ceil(((monday - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-                
-                return {
-                    id: `${year}-W${String(weekNumber).padStart(2, '0')}`,
-                    start: dates[0],
-                    end: dates[6],
-                    dates: dates
-                };
-            }
-            function toYYYYMMDD(date) { return date.toISOString().split('T')[0]; }
-            function escapeHTML(str) { return str ? str.replace(/[&<>'"]/g, tag => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[tag]||tag)) : ''; }
+        function openDeleteConfirmModal(taskId) {
+            const modalHTML = `
+                <div class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
+                    <div class="bg-white p-6 rounded-xl shadow-2xl w-11/12 max-w-sm text-center">
+                        <i class="fas fa-exclamation-triangle text-4xl text-red-500 mb-4"></i>
+                        <h3 class="text-xl font-bold mb-2">일정을 삭제하시겠습니까?</h3>
+                        <p class="text-gray-600 mb-6">이 작업은 되돌릴 수 없습니다.</p>
+                        <div class="flex justify-center space-x-4">
+                            <button id="cancel-delete-btn" class="px-6 py-2 bg-gray-200 rounded-lg">취소</button>
+                            <button id="confirm-delete-btn" class="px-6 py-2 bg-red-600 text-white font-bold rounded-lg">삭제</button>
+                        </div>
+                    </div>
+                </div>`;
+            showModal(modalHTML);
+            document.getElementById('confirm-delete-btn').onclick = () => deleteTask(taskId);
+            document.getElementById('cancel-delete-btn').onclick = closeModal;
+        }
 
-            startApp();
-        });
+        async function deleteTask(taskId) {
+            const taskDocRef = doc(db, `artifacts/${appId}/public/data/schedules`, taskId);
+            await deleteDoc(taskDocRef);
+            closeModal();
+        }
+
+        function getWeekInfo(offset = 0) {
+            const now = new Date();
+            now.setDate(now.getDate() + offset * 7);
+            const dayOfWeek = now.getDay();
+            const mondayOffset = (dayOfWeek === 0) ? -6 : 1 - dayOfWeek;
+            const monday = new Date(now);
+            monday.setDate(now.getDate() + mondayOffset);
+            
+            const dates = Array.from({length: 7}, (_, i) => {
+                const d = new Date(monday);
+                d.setDate(monday.getDate() + i);
+                return d;
+            });
+            
+            const year = monday.getFullYear();
+            const startOfYear = new Date(year, 0, 1);
+            const weekNumber = Math.ceil(((monday - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+            
+            return {
+                id: `${year}-W${String(weekNumber).padStart(2, '0')}`,
+                start: dates[0],
+                end: dates[6],
+                dates: dates
+            };
+        }
+        function toYYYYMMDD(date) { return date.toISOString().split('T')[0]; }
+        function escapeHTML(str) { return str ? str.replace(/[&<>'"]/g, tag => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[tag]||tag)) : ''; }
+
+        // 앱 시작
+        initializeFirebase();
+    });
     </script>
 </body>
 </html>

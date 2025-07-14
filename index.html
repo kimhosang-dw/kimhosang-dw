@@ -97,6 +97,7 @@
                             <select id="task-category" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
                                 <option value="입고">입고</option>
                                 <option value="출고">출고</option>
+                                <option value="개발">개발</option>
                                 <option value="기타">기타</option>
                             </select>
                         </div>
@@ -113,6 +114,7 @@
                     <button data-filter="all" class="filter-btn px-4 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200 active">전체</button>
                     <button data-filter="입고" class="filter-btn px-4 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200">입고</button>
                     <button data-filter="출고" class="filter-btn px-4 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200">출고</option>
+                    <button data-filter="개발" class="filter-btn px-4 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200">개발</button>
                     <button data-filter="기타" class="filter-btn px-4 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200">기타</button>
                 </div>
 
@@ -337,7 +339,7 @@
                 const days = ["월", "화", "수", "목", "금", "토", "일"];
                 week.dates.forEach((date, i) => {
                     const isToday = new Date().toDateString() === date.toDateString();
-                    headHTML += `<th class="px-1 py-2 border text-sm ${isToday ? 'bg-teal-200' : 'bg-gray-50'}">${days[i]}<br>${date.getDate()}</th>`;
+                    headHTML += `<th class="px-1 py-2 border text-sm ${isToday ? 'bg-teal-100' : 'bg-gray-50'}">${days[i]}<br>${date.getDate()}</th>`;
                 });
                 headHTML += '</tr>';
                 weeklyPlanHead.innerHTML = headHTML;
@@ -573,6 +575,7 @@
                                     <select id="edit-task-category" class="w-full px-4 py-2 border rounded-lg">
                                         <option value="입고" ${task.category === '입고' ? 'selected' : ''}>입고</option>
                                         <option value="출고" ${task.category === '출고' ? 'selected' : ''}>출고</option>
+                                        <option value="개발" ${task.category === '개발' ? 'selected' : ''}>개발</option>
                                         <option value="기타" ${task.category === '기타' ? 'selected' : ''}>기타</option>
                                     </select>
                                 </div>

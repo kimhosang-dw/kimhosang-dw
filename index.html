@@ -31,6 +31,7 @@
         .is-scrollable::after { opacity: 1; }
         .filter-btn.active { background-color: #0d9488; color: white; }
         .sticky-col { position: -webkit-sticky; position: sticky; left: 0; z-index: 10; }
+        .goal-input:checked + span { text-decoration: line-through; color: #9ca3af; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 antialiased">
@@ -137,6 +138,28 @@
                     <!-- 일정 목록이 여기에 표시됩니다. -->
                 </main>
             </section>
+
+            <!-- 목표 관리 -->
+            <section id="goals-view" class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-semibold mb-4 border-b pb-2">주간 목표</h3>
+                    <div id="weekly-goals-list" class="space-y-2">
+                        <!-- 주간 목표 아이템 -->
+                    </div>
+                    <button id="add-weekly-goal-btn" class="mt-4 w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition">
+                        <i class="fas fa-plus mr-2"></i> 목표 추가
+                    </button>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-semibold mb-4 border-b pb-2">월간 목표</h3>
+                    <div id="monthly-goals-list" class="space-y-2">
+                        <!-- 월간 목표 아이템 -->
+                    </div>
+                    <button id="add-monthly-goal-btn" class="mt-4 w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition">
+                        <i class="fas fa-plus mr-2"></i> 목표 추가
+                    </button>
+                </div>
+            </section>
         </div>
 
         <!-- 모달 컨테이너 -->
@@ -163,13 +186,13 @@
             const USER_COLORS = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#34495e'];
 
             let app, db, auth, firebaseUserId;
-            let usersCollectionRef, tasksCollectionRef, workPlanCollectionRef;
+            let usersCollectionRef, tasksCollectionRef, workPlanCollectionRef, goalsDocRef;
             let currentUser = null;
             let allUsers = [];
             let allTasks = [];
             let currentCategoryFilter = 'all';
             let currentDayOffset = 0;
-            let unsubscribeTasks = () => {}, unsubscribeUsers = () => {}, unsubscribeWorkPlan = () => {};
+            let unsubscribeTasks = () => {}, unsubscribeUsers = () => {}, unsubscribeWorkPlan = () => {}, unsubscribeGoals = () => {};
             let holidayCache = {};
 
             const appContainer = document.getElementById('app-container');
@@ -274,6 +297,7 @@
                     usersCollectionRef = collection(db, `artifacts/${appId}/public/data/users`);
                     tasksCollectionRef = collection(db, `artifacts/${appId}/public/data/schedules`);
                     workPlanCollectionRef = collection(db, `artifacts/${appId}/public/data/workPlan`);
+                    goalsDocRef = doc(db, `artifacts/${appId}/public/data/goals`, 'current');
 
                     onAuthStateChanged(auth, user => {
                         if (user) {
@@ -304,7 +328,7 @@
 
             function showMainAppScreen(user) {
                 unsubscribeAll();
-                currentUser = user;
+                if (user) currentUser = user; // 사용자 변경이 아닐 경우 기존 사용자 유지
                 userManagementView.classList.add('hidden');
                 mainAppView.classList.remove('hidden');
                 
@@ -312,6 +336,7 @@
                 
                 userInfo.innerHTML = `<span class="font-bold" style="color:${currentUser.color};">${currentUser.name}</span>님, 환영합니다.`;
                 
+                listenForGoals();
                 renderWeeklyPlan();
                 listenForTasks();
                 listenForUsersForColorMapping();
@@ -325,12 +350,15 @@
                 window.addEventListener('resize', checkTableScroll);
                 setupCategoryFilters();
                 document.getElementById('task-category').onchange = toggleDateFields;
+                document.getElementById('add-weekly-goal-btn').onclick = () => addGoal('weekly');
+                document.getElementById('add-monthly-goal-btn').onclick = () => addGoal('monthly');
             }
 
             function unsubscribeAll() {
                 unsubscribeTasks();
                 unsubscribeUsers();
                 unsubscribeWorkPlan();
+                unsubscribeGoals();
             }
             
             async function addNewUser() {
@@ -882,6 +910,86 @@
                 const taskDocRef = doc(db, `artifacts/${appId}/public/data/schedules`, taskId);
                 await deleteDoc(taskDocRef);
                 closeModal();
+            }
+
+            function listenForGoals() {
+                unsubscribeGoals();
+                unsubscribeGoals = onSnapshot(goalsDocRef, (docSnap) => {
+                    const data = docSnap.exists() ? docSnap.data() : { weekly: [], monthly: [] };
+                    renderGoals('weekly', data.weekly || []);
+                    renderGoals('monthly', data.monthly || []);
+                });
+            }
+
+            function renderGoals(type, goals) {
+                const container = document.getElementById(`${type}-goals-list`);
+                container.innerHTML = '';
+                let goalsToRender = goals;
+                if (goals.length < 5) {
+                    goalsToRender = [...goals, ...Array(5 - goals.length).fill({ id: crypto.randomUUID(), text: '', checked: false })];
+                }
+                
+                goalsToRender.forEach(goal => {
+                    const goalEl = document.createElement('div');
+                    goalEl.className = 'flex items-center gap-2';
+                    goalEl.innerHTML = `
+                        <input type="checkbox" id="${goal.id}" class="goal-input h-5 w-5 text-teal-600 border-gray-300 rounded focus:ring-teal-500" ${goal.checked ? 'checked' : ''}>
+                        <input type="text" value="${escapeHTML(goal.text)}" data-id="${goal.id}" class="w-full border-b focus:border-teal-500 outline-none">
+                    `;
+                    container.appendChild(goalEl);
+                });
+
+                container.querySelectorAll('input').forEach(input => {
+                    input.onchange = () => saveGoals();
+                    input.onblur = () => saveGoals();
+                });
+            }
+
+            function addGoal(type) {
+                const listId = `${type}-goals-list`;
+                const container = document.getElementById(listId);
+                const newGoalEl = document.createElement('div');
+                newGoalEl.className = 'flex items-center gap-2';
+                newGoalEl.innerHTML = `
+                    <input type="checkbox" id="${crypto.randomUUID()}" class="goal-input h-5 w-5 text-teal-600 border-gray-300 rounded focus:ring-teal-500">
+                    <input type="text" value="" data-id="${crypto.randomUUID()}" class="w-full border-b focus:border-teal-500 outline-none">
+                `;
+                container.appendChild(newGoalEl);
+                newGoalEl.querySelector('input[type="text"]').focus();
+                newGoalEl.querySelectorAll('input').forEach(input => {
+                    input.onchange = () => saveGoals();
+                    input.onblur = () => saveGoals();
+                });
+            }
+
+            async function saveGoals() {
+                const weeklyGoals = [];
+                document.querySelectorAll('#weekly-goals-list .flex').forEach(el => {
+                    const checkbox = el.querySelector('input[type="checkbox"]');
+                    const textInput = el.querySelector('input[type="text"]');
+                    if (textInput.value.trim() !== '') {
+                        weeklyGoals.push({
+                            id: checkbox.id,
+                            text: textInput.value,
+                            checked: checkbox.checked
+                        });
+                    }
+                });
+
+                const monthlyGoals = [];
+                document.querySelectorAll('#monthly-goals-list .flex').forEach(el => {
+                    const checkbox = el.querySelector('input[type="checkbox"]');
+                    const textInput = el.querySelector('input[type="text"]');
+                     if (textInput.value.trim() !== '') {
+                        monthlyGoals.push({
+                            id: checkbox.id,
+                            text: textInput.value,
+                            checked: checkbox.checked
+                        });
+                    }
+                });
+
+                await setDoc(goalsDocRef, { weekly: weeklyGoals, monthly: monthlyGoals });
             }
             
             // PWA 서비스 워커 등록

@@ -31,7 +31,6 @@
         .is-scrollable::after { opacity: 1; }
         .filter-btn.active { background-color: #0d9488; color: white; }
         .sticky-col { position: -webkit-sticky; position: sticky; left: 0; z-index: 10; }
-        .goal-input:checked + span { text-decoration: line-through; color: #9ca3af; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 antialiased">
@@ -101,6 +100,7 @@
                                 <option value="입고">입고</option>
                                 <option value="출고">출고</option>
                                 <option value="개발">개발</option>
+                                <option value="미팅">미팅</option>
                                 <option value="기타">기타</option>
                             </select>
                         </div>
@@ -125,40 +125,27 @@
                     </form>
                 </div>
                 
-                <div class="mb-4 flex items-center justify-start space-x-2 bg-white p-3 rounded-lg shadow-sm">
-                    <span class="font-semibold mr-2">필터:</span>
-                    <button data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition bg-gray-200 active">전체</button>
-                    <button data-filter="입고" class="filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition bg-gray-200">입고</button>
-                    <button data-filter="출고" class="filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition bg-gray-200">출고</option>
-                    <button data-filter="개발" class="filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition bg-gray-200">개발</button>
-                    <button data-filter="기타" class="filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition bg-gray-200">기타</button>
+                <div class="mb-4 flex flex-col sm:flex-row items-center justify-start gap-4 bg-white p-3 rounded-lg shadow-sm">
+                    <div class="flex items-center space-x-2">
+                        <span class="font-semibold">구분:</span>
+                        <button data-filter="all" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200 active">전체</button>
+                        <button data-filter="입고" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200">입고</button>
+                        <button data-filter="출고" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200">출고</option>
+                        <button data-filter="개발" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200">개발</button>
+                        <button data-filter="미팅" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200">미팅</button>
+                        <button data-filter="기타" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition bg-gray-200">기타</button>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-semibold">작성자:</span>
+                        <select id="user-filter" class="w-full sm:w-auto px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
+                            <!-- User options will be populated here -->
+                        </select>
+                    </div>
                 </div>
 
                 <main id="task-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     <!-- 일정 목록이 여기에 표시됩니다. -->
                 </main>
-            </section>
-
-            <!-- 목표 관리 -->
-            <section id="goals-view" class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
-                <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <h3 class="text-xl font-semibold mb-4 border-b pb-2">주간 목표</h3>
-                    <div id="weekly-goals-list" class="space-y-2">
-                        <!-- 주간 목표 아이템 -->
-                    </div>
-                    <button id="add-weekly-goal-btn" class="mt-4 w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition">
-                        <i class="fas fa-plus mr-2"></i> 목표 추가
-                    </button>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <h3 class="text-xl font-semibold mb-4 border-b pb-2">월간 목표</h3>
-                    <div id="monthly-goals-list" class="space-y-2">
-                        <!-- 월간 목표 아이템 -->
-                    </div>
-                    <button id="add-monthly-goal-btn" class="mt-4 w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition">
-                        <i class="fas fa-plus mr-2"></i> 목표 추가
-                    </button>
-                </div>
             </section>
         </div>
 
@@ -186,13 +173,14 @@
             const USER_COLORS = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#34495e'];
 
             let app, db, auth, firebaseUserId;
-            let usersCollectionRef, tasksCollectionRef, workPlanCollectionRef, goalsDocRef;
+            let usersCollectionRef, tasksCollectionRef, workPlanCollectionRef;
             let currentUser = null;
             let allUsers = [];
             let allTasks = [];
             let currentCategoryFilter = 'all';
+            let currentUserFilter = 'all';
             let currentDayOffset = 0;
-            let unsubscribeTasks = () => {}, unsubscribeUsers = () => {}, unsubscribeWorkPlan = () => {}, unsubscribeGoals = () => {};
+            let unsubscribeTasks = () => {}, unsubscribeUsers = () => {}, unsubscribeWorkPlan = () => {};
             let holidayCache = {};
 
             const appContainer = document.getElementById('app-container');
@@ -225,6 +213,15 @@
                 return new Date(year, month - 1, day);
             }
 
+            function getWeekId(date) {
+                const d = new Date(date);
+                d.setHours(0, 0, 0, 0);
+                d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+                const yearStart = new Date(d.getFullYear(), 0, 1);
+                const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+                return `${d.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+            }
+            
             function get7DaysInfo(offset = 0) {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
@@ -236,12 +233,7 @@
                     return d;
                 });
                 
-                const year = today.getFullYear();
-                const startOfYear = new Date(year, 0, 1);
-                const weekNumber = Math.ceil(((today - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-                
                 return {
-                    id: `${year}-W${String(weekNumber).padStart(2, '0')}`,
                     start: dates[0],
                     end: dates[6],
                     dates: dates
@@ -297,7 +289,6 @@
                     usersCollectionRef = collection(db, `artifacts/${appId}/public/data/users`);
                     tasksCollectionRef = collection(db, `artifacts/${appId}/public/data/schedules`);
                     workPlanCollectionRef = collection(db, `artifacts/${appId}/public/data/workPlan`);
-                    goalsDocRef = doc(db, `artifacts/${appId}/public/data/goals`, 'current');
 
                     onAuthStateChanged(auth, user => {
                         if (user) {
@@ -336,7 +327,6 @@
                 
                 userInfo.innerHTML = `<span class="font-bold" style="color:${currentUser.color};">${currentUser.name}</span>님, 환영합니다.`;
                 
-                listenForGoals();
                 renderWeeklyPlan();
                 listenForTasks();
                 listenForUsersForColorMapping();
@@ -350,15 +340,12 @@
                 window.addEventListener('resize', checkTableScroll);
                 setupCategoryFilters();
                 document.getElementById('task-category').onchange = toggleDateFields;
-                document.getElementById('add-weekly-goal-btn').onclick = () => addGoal('weekly');
-                document.getElementById('add-monthly-goal-btn').onclick = () => addGoal('monthly');
             }
 
             function unsubscribeAll() {
                 unsubscribeTasks();
                 unsubscribeUsers();
                 unsubscribeWorkPlan();
-                unsubscribeGoals();
             }
             
             async function addNewUser() {
@@ -409,6 +396,7 @@
             async function deleteUser(userId) {
                 const userDocRef = doc(db, `artifacts/${appId}/public/data/users`, userId);
                 await deleteDoc(userDocRef);
+                closeModal();
                 if (currentUser && currentUser.id === userId) {
                     showUserManagementScreen();
                 }
@@ -454,7 +442,7 @@
                 });
                 weeklyPlanBody.innerHTML = bodyHTML;
                 
-                listenForWorkPlan(week.id);
+                listenForWorkPlan();
                 
                 weeklyPlanBody.onclick = (e) => {
                     const cell = e.target.closest('.plan-cell');
@@ -478,13 +466,15 @@
                 }
             }
 
-            function listenForWorkPlan(weekId) {
+            function listenForWorkPlan() {
                 unsubscribeWorkPlan();
-                const docRef = doc(workPlanCollectionRef, weekId);
-                unsubscribeWorkPlan = onSnapshot(docRef, (docSnap) => {
+                unsubscribeWorkPlan = onSnapshot(workPlanCollectionRef, (snapshot) => {
                     if (!document.getElementById('weekly-plan-body')) return;
-                    const planData = docSnap.exists() ? docSnap.data() : {};
-                    populateWorkPlan(planData);
+                    const allPlansByMachine = {};
+                    snapshot.forEach(doc => {
+                        allPlansByMachine[doc.id] = doc.data().plans || [];
+                    });
+                    populateWorkPlan(allPlansByMachine);
                 });
             }
 
@@ -549,29 +539,45 @@
                     ? futureTasks 
                     : futureTasks.filter(task => task.category === currentCategoryFilter);
 
-                filteredTasks.sort((a, b) => {
+                const finalFilteredTasks = currentUserFilter === 'all'
+                    ? filteredTasks
+                    : filteredTasks.filter(task => task.authorName === currentUserFilter);
+
+                finalFilteredTasks.sort((a, b) => {
                     const dateA = new Date(a.dueDate || a.endDate);
                     const dateB = new Date(b.dueDate || b.endDate);
                     return dateA - dateB;
                 });
 
-                if (filteredTasks.length === 0) {
+                if (finalFilteredTasks.length === 0) {
                     taskList.innerHTML = '<p class="text-gray-500 text-center col-span-full">표시할 일정이 없습니다.</p>';
                 } else {
-                    filteredTasks.forEach(task => taskList.appendChild(createTaskCard(task)));
+                    finalFilteredTasks.forEach(task => taskList.appendChild(createTaskCard(task)));
                 }
             }
 
             function setupCategoryFilters() {
-                const filterButtons = document.querySelectorAll('.filter-btn');
-                filterButtons.forEach(button => {
+                document.querySelectorAll('.filter-btn').forEach(button => {
                     button.addEventListener('click', () => {
-                        filterButtons.forEach(btn => btn.classList.remove('active', 'bg-teal-600', 'text-white'));
+                        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active', 'bg-teal-600', 'text-white'));
                         button.classList.add('active', 'bg-teal-600', 'text-white');
                         currentCategoryFilter = button.dataset.filter;
                         renderTaskList();
                     });
                 });
+
+                const userFilterSelect = document.getElementById('user-filter');
+                userFilterSelect.innerHTML = '<option value="all">전체 사용자</option>';
+                allUsers.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.name;
+                    option.textContent = user.name;
+                    userFilterSelect.appendChild(option);
+                });
+                userFilterSelect.onchange = (e) => {
+                    currentUserFilter = e.target.value;
+                    renderTaskList();
+                };
             }
 
             function createTaskCard(task) {
@@ -691,11 +697,10 @@
                 const listContainer = document.getElementById('work-plan-items-list');
                 document.getElementById('close-work-plan-modal').onclick = closeModal;
 
-                const weekId = get7DaysInfo(currentDayOffset).id;
-                const docRef = doc(workPlanCollectionRef, weekId);
+                const docRef = doc(workPlanCollectionRef, machine);
                 const docSnap = await getDoc(docRef);
-                const planData = docSnap.exists() ? docSnap.data() : {};
-                const items = planData[machine] || [];
+                const items = docSnap.exists() ? docSnap.data().plans : [];
+
                 const itemsForThisDate = items.filter(item => {
                     const start = parseYYYYMMDD(item.startDate);
                     const end = parseYYYYMMDD(item.endDate);
@@ -769,21 +774,19 @@
                     alert('시작일은 종료일보다 늦을 수 없습니다.'); return;
                 }
 
-                const weekId = get7DaysInfo(currentDayOffset).id;
-                const docRef = doc(workPlanCollectionRef, weekId);
+                const docRef = doc(workPlanCollectionRef, machine);
                 const docSnap = await getDoc(docRef);
-                const planData = docSnap.exists() ? docSnap.data() : {};
-                const items = planData[machine] || [];
+                const items = docSnap.exists() ? docSnap.data().plans : [];
 
                 if (itemId) { // 수정
                     const itemIndex = items.findIndex(item => item.id === itemId);
                     if (itemIndex > -1) {
                         items[itemIndex] = { ...items[itemIndex], name, startDate, endDate };
                     }
-                    await updateDoc(docRef, { [machine]: items });
+                    await setDoc(docRef, { plans: items });
                 } else { // 추가
                     const newItem = { id: crypto.randomUUID(), name, startDate, endDate };
-                    await setDoc(docRef, { [machine]: arrayUnion(newItem) }, { merge: true });
+                    await setDoc(docRef, { plans: arrayUnion(newItem) }, { merge: true });
                 }
                 closeModal();
             }
@@ -807,14 +810,12 @@
             }
 
             async function handleDeletePlanItem(machine, itemId) {
-                const weekId = get7DaysInfo(currentDayOffset).id;
-                const docRef = doc(workPlanCollectionRef, weekId);
+                const docRef = doc(workPlanCollectionRef, machine);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
-                    const planData = docSnap.data();
-                    const items = planData[machine] || [];
+                    const items = docSnap.data().plans || [];
                     const updatedItems = items.filter(item => item.id !== itemId);
-                    await updateDoc(docRef, { [machine]: updatedItems });
+                    await setDoc(docRef, { plans: updatedItems });
                 }
                 closeModal();
             }
@@ -871,7 +872,7 @@
                 showModal(modalHTML);
                 
                 document.getElementById('edit-task-form-dynamic').addEventListener('submit', handleUpdateTask);
-                document.getElementById('cancel-edit-btn').addEventListener('click', closeModal);
+                document.getElementById('cancel-edit-btn').onclick = closeModal;
             }
 
             async function handleUpdateTask(e) {
@@ -910,86 +911,6 @@
                 const taskDocRef = doc(db, `artifacts/${appId}/public/data/schedules`, taskId);
                 await deleteDoc(taskDocRef);
                 closeModal();
-            }
-
-            function listenForGoals() {
-                unsubscribeGoals();
-                unsubscribeGoals = onSnapshot(goalsDocRef, (docSnap) => {
-                    const data = docSnap.exists() ? docSnap.data() : { weekly: [], monthly: [] };
-                    renderGoals('weekly', data.weekly || []);
-                    renderGoals('monthly', data.monthly || []);
-                });
-            }
-
-            function renderGoals(type, goals) {
-                const container = document.getElementById(`${type}-goals-list`);
-                container.innerHTML = '';
-                let goalsToRender = goals;
-                if (goals.length < 5) {
-                    goalsToRender = [...goals, ...Array(5 - goals.length).fill({ id: crypto.randomUUID(), text: '', checked: false })];
-                }
-                
-                goalsToRender.forEach(goal => {
-                    const goalEl = document.createElement('div');
-                    goalEl.className = 'flex items-center gap-2';
-                    goalEl.innerHTML = `
-                        <input type="checkbox" id="${goal.id}" class="goal-input h-5 w-5 text-teal-600 border-gray-300 rounded focus:ring-teal-500" ${goal.checked ? 'checked' : ''}>
-                        <input type="text" value="${escapeHTML(goal.text)}" data-id="${goal.id}" class="w-full border-b focus:border-teal-500 outline-none">
-                    `;
-                    container.appendChild(goalEl);
-                });
-
-                container.querySelectorAll('input').forEach(input => {
-                    input.onchange = () => saveGoals();
-                    input.onblur = () => saveGoals();
-                });
-            }
-
-            function addGoal(type) {
-                const listId = `${type}-goals-list`;
-                const container = document.getElementById(listId);
-                const newGoalEl = document.createElement('div');
-                newGoalEl.className = 'flex items-center gap-2';
-                newGoalEl.innerHTML = `
-                    <input type="checkbox" id="${crypto.randomUUID()}" class="goal-input h-5 w-5 text-teal-600 border-gray-300 rounded focus:ring-teal-500">
-                    <input type="text" value="" data-id="${crypto.randomUUID()}" class="w-full border-b focus:border-teal-500 outline-none">
-                `;
-                container.appendChild(newGoalEl);
-                newGoalEl.querySelector('input[type="text"]').focus();
-                newGoalEl.querySelectorAll('input').forEach(input => {
-                    input.onchange = () => saveGoals();
-                    input.onblur = () => saveGoals();
-                });
-            }
-
-            async function saveGoals() {
-                const weeklyGoals = [];
-                document.querySelectorAll('#weekly-goals-list .flex').forEach(el => {
-                    const checkbox = el.querySelector('input[type="checkbox"]');
-                    const textInput = el.querySelector('input[type="text"]');
-                    if (textInput.value.trim() !== '') {
-                        weeklyGoals.push({
-                            id: checkbox.id,
-                            text: textInput.value,
-                            checked: checkbox.checked
-                        });
-                    }
-                });
-
-                const monthlyGoals = [];
-                document.querySelectorAll('#monthly-goals-list .flex').forEach(el => {
-                    const checkbox = el.querySelector('input[type="checkbox"]');
-                    const textInput = el.querySelector('input[type="text"]');
-                     if (textInput.value.trim() !== '') {
-                        monthlyGoals.push({
-                            id: checkbox.id,
-                            text: textInput.value,
-                            checked: checkbox.checked
-                        });
-                    }
-                });
-
-                await setDoc(goalsDocRef, { weekly: weeklyGoals, monthly: monthlyGoals });
             }
             
             // PWA 서비스 워커 등록

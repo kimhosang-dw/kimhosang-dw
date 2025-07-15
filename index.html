@@ -143,6 +143,19 @@
                     </div>
                 </div>
 
+                <div class="mb-4 flex flex-col sm:flex-row items-center justify-start gap-4 bg-white p-3 rounded-lg shadow-sm">
+                     <div class="flex items-center space-x-2">
+                        <span class="font-semibold">기간 검색:</span>
+                        <input type="date" id="search-start-date" class="w-full sm:w-auto px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
+                        <span>~</span>
+                        <input type="date" id="search-end-date" class="w-full sm:w-auto px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500">
+                        <button id="date-search-btn" class="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold transition hover:bg-teal-700">검색</button>
+                        <button id="clear-search-btn" class="px-4 py-2 bg-gray-400 text-white rounded-lg text-sm font-semibold transition hover:bg-gray-500">초기화</button>
+                    </div>
+                    <div class="flex-grow"></div>
+                    <button id="view-past-tasks-btn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm font-semibold transition hover:bg-gray-300">지난 일정 보기</button>
+                </div>
+
                 <main id="task-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     <!-- 일정 목록이 여기에 표시됩니다. -->
                 </main>
@@ -182,6 +195,7 @@
             let currentDayOffset = 0;
             let unsubscribeTasks = () => {}, unsubscribeUsers = () => {}, unsubscribeWorkPlan = () => {};
             let holidayCache = {};
+            let showPastTasks = false;
 
             const appContainer = document.getElementById('app-container');
             const userManagementView = document.getElementById('user-management-view');
@@ -221,7 +235,7 @@
                 const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
                 return `${d.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
             }
-            
+
             function get7DaysInfo(offset = 0) {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
@@ -340,6 +354,19 @@
                 window.addEventListener('resize', checkTableScroll);
                 setupCategoryFilters();
                 document.getElementById('task-category').onchange = toggleDateFields;
+                document.getElementById('date-search-btn').onclick = () => renderTaskList();
+                document.getElementById('clear-search-btn').onclick = () => {
+                    document.getElementById('search-start-date').value = '';
+                    document.getElementById('search-end-date').value = '';
+                    renderTaskList();
+                };
+                document.getElementById('view-past-tasks-btn').onclick = () => {
+                    showPastTasks = !showPastTasks;
+                    const btn = document.getElementById('view-past-tasks-btn');
+                    btn.textContent = showPastTasks ? '현재 일정만 보기' : '지난 일정 보기';
+                    btn.classList.toggle('bg-yellow-200');
+                    renderTaskList();
+                };
             }
 
             function unsubscribeAll() {
@@ -527,32 +554,48 @@
                 if (!taskList) return;
                 taskList.innerHTML = '';
                 
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-
-                const futureTasks = allTasks.filter(task => {
-                    const dueDate = task.dueDate || task.endDate;
-                    return parseYYYYMMDD(dueDate) >= today;
-                });
+                let tasksToDisplay = [...allTasks];
                 
-                const filteredTasks = currentCategoryFilter === 'all' 
-                    ? futureTasks 
-                    : futureTasks.filter(task => task.category === currentCategoryFilter);
+                const searchStartDate = document.getElementById('search-start-date').value;
+                const searchEndDate = document.getElementById('search-end-date').value;
 
-                const finalFilteredTasks = currentUserFilter === 'all'
-                    ? filteredTasks
-                    : filteredTasks.filter(task => task.authorName === currentUserFilter);
+                if (searchStartDate && searchEndDate) {
+                    const searchStart = parseYYYYMMDD(searchStartDate);
+                    const searchEnd = parseYYYYMMDD(searchEndDate);
+                    tasksToDisplay = tasksToDisplay.filter(task => {
+                        const taskStart = parseYYYYMMDD(task.startDate || task.dueDate);
+                        const taskEnd = parseYYYYMMDD(task.endDate || task.dueDate);
+                        return taskStart <= searchEnd && taskEnd >= searchStart;
+                    });
+                } else {
+                    if (!showPastTasks) {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        tasksToDisplay = tasksToDisplay.filter(task => {
+                            const dueDate = task.dueDate || task.endDate;
+                            return parseYYYYMMDD(dueDate) >= today;
+                        });
+                    }
+                }
 
-                finalFilteredTasks.sort((a, b) => {
-                    const dateA = new Date(a.dueDate || a.endDate);
-                    const dateB = new Date(b.dueDate || b.endDate);
+                if (currentCategoryFilter !== 'all') {
+                    tasksToDisplay = tasksToDisplay.filter(task => task.category === currentCategoryFilter);
+                }
+
+                if (currentUserFilter !== 'all') {
+                    tasksToDisplay = tasksToDisplay.filter(task => task.authorName === currentUserFilter);
+                }
+
+                tasksToDisplay.sort((a, b) => {
+                    const dateA = new Date(a.dueDate || a.startDate);
+                    const dateB = new Date(b.dueDate || b.startDate);
                     return dateA - dateB;
                 });
 
-                if (finalFilteredTasks.length === 0) {
+                if (tasksToDisplay.length === 0) {
                     taskList.innerHTML = '<p class="text-gray-500 text-center col-span-full">표시할 일정이 없습니다.</p>';
                 } else {
-                    finalFilteredTasks.forEach(task => taskList.appendChild(createTaskCard(task)));
+                    tasksToDisplay.forEach(task => taskList.appendChild(createTaskCard(task)));
                 }
             }
 
